@@ -78,45 +78,58 @@ public interface ShellRepository extends JpaRepository<Shell, UUID>, JpaSpecific
 
    @Query(
            value = """
-                   SELECT DISTINCT ON (s.id) s.*
-                   FROM SHELL s
-                   JOIN SHELL_IDENTIFIER si ON si.fk_shell_id = s.id
-                   LEFT JOIN SHELL_IDENTIFIER_EXTERNAL_SUBJECT_REFERENCE sies
-                       ON sies.FK_SHELL_IDENTIFIER_EXTERNAL_SUBJECT_ID = si.id
-                   LEFT JOIN SHELL_IDENTIFIER_EXTERNAL_SUBJECT_REFERENCE_KEY sider
-                       ON sider.FK_SI_EXTERNAL_SUBJECT_REFERENCE_ID = sies.id
-                   WHERE
-                       s.created_date > :cursorCreatedDate
-                       AND (
-                           :tenantId IS NULL
-                           OR :tenantId = :owningTenantId
-                           OR sider.ref_key_value = :tenantId
-                           OR (
-                               sider.ref_key_value = :publicWildcardPrefix
-                               AND si.namespace IN (:publicWildcardAllowedTypes)
-                           )
-                       )
-                   ORDER BY s.id, s.created_date ASC
+           SELECT s.*
+            FROM shell s
+            WHERE s.created_date > :cursorCreatedDate
+              AND (
+                  :tenantId IS NULL
+                  OR :tenantId = :owningTenantId
+                  OR EXISTS (
+                      SELECT 1
+                      FROM shell_identifier si
+                      JOIN shell_identifier_external_subject_reference sies
+                           ON sies.fk_shell_identifier_external_subject_id = si.id
+                      JOIN shell_identifier_external_subject_reference_key sider
+                           ON sider.fk_si_external_subject_reference_id = sies.id
+                      WHERE si.fk_shell_id = s.id
+                        AND (
+                            sider.ref_key_value = :tenantId
+                            OR (
+                                sider.ref_key_value = :publicWildcardPrefix
+                                AND si.namespace IN (:publicWildcardAllowedTypes)
+                            )
+                        )
+                  )
+              )
+            ORDER BY s.id, s.created_date ASC
         """,
            countQuery = """
-        SELECT COUNT(DISTINCT s.id)
-        FROM SHELL s
-        JOIN SHELL_IDENTIFIER si ON si.fk_shell_id = s.id
-        LEFT JOIN SHELL_IDENTIFIER_EXTERNAL_SUBJECT_REFERENCE sies
-            ON sies.FK_SHELL_IDENTIFIER_EXTERNAL_SUBJECT_ID = si.id
-        LEFT JOIN SHELL_IDENTIFIER_EXTERNAL_SUBJECT_REFERENCE_KEY sider
-            ON sider.FK_SI_EXTERNAL_SUBJECT_REFERENCE_ID = sies.id
-        WHERE
-            s.created_date > :cursorCreatedDate
-            AND (
-                :tenantId IS NULL
-                OR :tenantId = :owningTenantId
-                OR sider.ref_key_value = :tenantId
-                OR (
-                    sider.ref_key_value = :publicWildcardPrefix
-                    AND si.namespace IN (:publicWildcardAllowedTypes)
-                )
-            )
+         SELECT COUNT(*)
+           FROM (
+               SELECT s.id
+               FROM shell s
+               WHERE s.created_date > :cursorCreatedDate
+                 AND (
+                     :tenantId IS NULL
+                     OR :tenantId = :owningTenantId
+                     OR EXISTS (
+                         SELECT 1
+                         FROM shell_identifier si
+                         JOIN shell_identifier_external_subject_reference sies
+                              ON sies.fk_shell_identifier_external_subject_id = si.id
+                         JOIN shell_identifier_external_subject_reference_key sider
+                              ON sider.fk_si_external_subject_reference_id = sies.id
+                         WHERE si.fk_shell_id = s.id
+                           AND (
+                               sider.ref_key_value = :tenantId
+                               OR (
+                                   sider.ref_key_value = :publicWildcardPrefix
+                                   AND si.namespace IN (:publicWildcardAllowedTypes)
+                               )
+                           )
+                     )
+                 )
+           )
         """,
            nativeQuery = true
    )
